@@ -8,12 +8,14 @@
 
 #include <Adafruit_NeoPixel.h>
 
-#define BRIGHTNESS 50 // 0 to 255
+#define BRIGHTNESS 200 // 0 to 255
 #define PIN      6    // digital Arduino pin
 #define N_LEDS 16     // number of pixels on strip
 #define REDLINE 8000  // define the engine speed's limit
+#define LOW_END 4000  // define the minimum RPM before LEDs start to light up
 
 int idealShiftSpeed = REDLINE - 300;  // generalized, find real ideal speed using actual HP/TQ curves
+int numPixels = 0;                    // Number of pixels we'd like to display for one iteration
 
 // initialize strip object and colors
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(N_LEDS, PIN, NEO_GRB + NEO_KHZ800);
@@ -22,7 +24,7 @@ uint32_t red = strip.Color(BRIGHTNESS, 0, 0);
 uint32_t blue = strip.Color(0, 0, BRIGHTNESS);
 
 // test values
-float currEngineSpeed[13] = {1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 7300.0, 7400.0, 7450.0, 7500.0, 7750.0, 8000.0};
+float currEngineSpeed[16] = {1000.0,1000.0, 1000.0, 1000.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 7500.0, 8000.0, 8500.0, 8500.0, 8500.0};
 
 void setup() {
   strip.begin();
@@ -31,19 +33,23 @@ void setup() {
 
 void loop() {
   // for each RPM input (test data)
-  for (int i = 0; i < 13; i++)
+  for (int i = 0; i < 16; i++)
   {
     // if we're at or past the ideal engine speed for upshifts, flash
     if (currEngineSpeed[i] >= idealShiftSpeed)
     {
       flash();
+    // if we're under the low end of the powerband, don't show anything
+    } else if (currEngineSpeed[i] < LOW_END)
+    {
+      strip.clear();
     } else
     {
-      // else, find % of current engine speed, and map it to the percentage of pixels we want to light up
-      int numPixels = (currEngineSpeed[i] / REDLINE) * N_LEDS;
+      // else, find % of current engine speed, and map it to the num of pixels we want to light up
+      numPixels = map(currEngineSpeed[i], LOW_END, REDLINE, 0, N_LEDS);
       updateLEDS(numPixels);
     }
-    delay(50);
+    delay(80);
   }
 }
 
@@ -67,7 +73,9 @@ void updateLEDS(int n)
   // light up number of pixels based on parameter
   for (int i = 0; i < n; i++)
   {
-    // if we're at least 60% to the redline, light up blue, else light up green
+    // RPM<33%      : GREEN
+    // 33%<RPM<66%  : BLUE
+    // RPM>66%      : RED
     if (i < N_LEDS * 0.33)
     {
       strip.setPixelColor(i, green);
